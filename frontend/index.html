@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Google Ads Monitor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e17;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: #1e293b;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --accent: #22d3ee;
+    --accent2: #818cf8;
+    --red: #f87171;
+    --amber: #fbbf24;
+    --green: #34d399;
+    --blue: #60a5fa;
+    --radius: 12px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .grain {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .app { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+  /* Header */
+  .header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px solid var(--border);
+  }
+  .header h1 {
+    font-size: 28px; font-weight: 700; letter-spacing: -0.5px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .header .subtitle { color: var(--text2); font-size: 14px; margin-top: 4px; }
+  .header .live-badge {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface); border: 1px solid var(--border);
+    padding: 8px 16px; border-radius: 99px; font-size: 13px; color: var(--text2);
+  }
+  .header .live-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* Summary Cards */
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px 24px; position: relative; overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: var(--accent); }
+  .card::after {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  }
+  .card:nth-child(1)::after { background: var(--accent); }
+  .card:nth-child(2)::after { background: var(--red); }
+  .card:nth-child(3)::after { background: var(--accent2); }
+  .card:nth-child(4)::after { background: var(--green); }
+  .card .label { font-size: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+  .card .value { font-size: 36px; font-weight: 700; margin-top: 8px; font-family: 'JetBrains Mono', monospace; }
+  .card:nth-child(1) .value { color: var(--accent); }
+  .card:nth-child(2) .value { color: var(--red); }
+  .card:nth-child(3) .value { color: var(--accent2); }
+  .card:nth-child(4) .value { color: var(--green); }
+  .card .sub { font-size: 12px; color: var(--text2); margin-top: 4px; }
+
+  /* Tabs */
+  .tabs {
+    display: flex; gap: 4px; margin-bottom: 24px;
+    background: var(--surface); border-radius: var(--radius); padding: 4px;
+    border: 1px solid var(--border); width: fit-content;
+  }
+  .tab {
+    padding: 10px 20px; border-radius: 8px; cursor: pointer;
+    font-size: 14px; font-weight: 500; color: var(--text2);
+    transition: all 0.2s; border: none; background: none;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--accent); color: var(--bg); font-weight: 600; }
+
+  /* Panel */
+  .panel { display: none; }
+  .panel.active { display: block; animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  /* Table */
+  .table-wrap {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: left; padding: 14px 20px; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 1px; color: var(--text2);
+    font-weight: 600; background: var(--surface2); border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 14px 20px; font-size: 14px; border-bottom: 1px solid var(--border);
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(34,211,238,0.03); }
+  .mono { font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+
+  /* Status badges */
+  .badge {
+    display: inline-block; padding: 4px 10px; border-radius: 6px;
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .badge-active, .badge-enabled { background: rgba(52,211,153,0.15); color: var(--green); }
+  .badge-paused { background: rgba(251,191,36,0.15); color: var(--amber); }
+  .badge-removed, .badge-stopped { background: rgba(248,113,113,0.15); color: var(--red); }
+  .badge-unknown { background: rgba(148,163,184,0.15); color: var(--text2); }
+
+  /* Alerts list */
+  .alert-item {
+    display: flex; gap: 16px; padding: 16px 20px; align-items: flex-start;
+    border-bottom: 1px solid var(--border); transition: background 0.15s;
+  }
+  .alert-item:hover { background: rgba(34,211,238,0.03); }
+  .alert-item:last-child { border-bottom: none; }
+  .alert-icon {
+    width: 36px; height: 36px; border-radius: 8px; display: flex;
+    align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;
+  }
+  .alert-icon.stopped { background: rgba(248,113,113,0.15); }
+  .alert-icon.spend { background: rgba(251,191,36,0.15); }
+  .alert-icon.status { background: rgba(129,140,248,0.15); }
+  .alert-msg { font-size: 14px; line-height: 1.5; }
+  .alert-time { font-size: 12px; color: var(--text2); margin-top: 4px; font-family: 'JetBrains Mono', monospace; }
+
+  /* Charts */
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .chart-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px;
+  }
+  .chart-box h3 { font-size: 14px; color: var(--text2); margin-bottom: 16px; font-weight: 500; }
+
+  /* Snapshot */
+  .filter-bar {
+    display: flex; gap: 12px; margin-bottom: 16px; align-items: center;
+  }
+  .filter-bar input, .filter-bar select {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 8px 14px; border-radius: 8px; font-size: 13px; font-family: 'DM Sans';
+  }
+  .filter-bar input:focus, .filter-bar select:focus { outline: none; border-color: var(--accent); }
+
+  .empty { text-align: center; padding: 60px 20px; color: var(--text2); }
+  .empty .icon { font-size: 48px; margin-bottom: 12px; }
+
+  /* Delta indicators */
+  .delta { font-size: 12px; font-weight: 600; }
+  .delta.up { color: var(--green); }
+  .delta.down { color: var(--red); }
+  .delta.flat { color: var(--text2); }
+
+  @media (max-width: 900px) {
+    .cards { grid-template-columns: repeat(2, 1fr); }
+    .charts { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 600px) {
+    .cards { grid-template-columns: 1fr; }
+    .app { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="app">
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <h1>Google Ads Monitor</h1>
+      <div class="subtitle">Coupler.io → FastAPI | Monitoramento em tempo real</div>
+    </div>
+    <div class="live-badge">
+      <div class="live-dot"></div>
+      <span id="lastUpdate">Carregando...</span>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="cards">
+    <div class="card"><div class="label">Campanhas</div><div class="value" id="totalCampaigns">-</div><div class="sub">Monitoradas</div></div>
+    <div class="card"><div class="label">Alertas Hoje</div><div class="value" id="alertsToday">-</div><div class="sub">Eventos detectados</div></div>
+    <div class="card"><div class="label">Snapshots</div><div class="value" id="totalSnapshots">-</div><div class="sub">Batches processados</div></div>
+    <div class="card"><div class="label">Status</div><div class="value" id="systemStatus">OK</div><div class="sub">Sistema operacional</div></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('campaigns')">Campanhas</button>
+    <button class="tab" onclick="switchTab('alerts')">Alertas</button>
+    <button class="tab" onclick="switchTab('charts')">Gráficos</button>
+    <button class="tab" onclick="switchTab('snapshots')">Snapshots</button>
+  </div>
+
+  <!-- Campaigns Panel -->
+  <div id="panel-campaigns" class="panel active">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Campanha</th>
+            <th>Status</th>
+            <th>Impressions (hoje)</th>
+            <th>Impressions (ontem)</th>
+            <th>Spend (hoje)</th>
+            <th>Spend (ontem)</th>
+            <th>Variação</th>
+          </tr>
+        </thead>
+        <tbody id="campaignsBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Alerts Panel -->
+  <div id="panel-alerts" class="panel">
+    <div class="table-wrap" id="alertsList"></div>
+  </div>
+
+  <!-- Charts Panel -->
+  <div id="panel-charts" class="panel">
+    <div class="charts">
+      <div class="chart-box">
+        <h3>Spend por Batch</h3>
+        <canvas id="chartSpend"></canvas>
+      </div>
+      <div class="chart-box">
+        <h3>Impressions por Batch</h3>
+        <canvas id="chartImpressions"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Snapshots Panel -->
+  <div id="panel-snapshots" class="panel">
+    <div class="filter-bar">
+      <input type="text" id="snapshotFilter" placeholder="Filtrar por Campaign ID..." oninput="loadSnapshots()">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Batch</th>
+            <th>Campanha</th>
+            <th>Status</th>
+            <th>Impressions</th>
+            <th>Spend</th>
+            <th>Data</th>
+            <th>Ingestão</th>
+          </tr>
+        </thead>
+        <tbody id="snapshotsBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const API = window.location.origin;
+let spendChart, impressionsChart;
+
+// ---- Tab switching ----
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelector(`[onclick="switchTab('${name}')"]`).classList.add('active');
+  document.getElementById(`panel-${name}`).classList.add('active');
+  if (name === 'charts') loadMetrics();
+  if (name === 'snapshots') loadSnapshots();
+}
+
+// ---- Summary ----
+async function loadSummary() {
+  try {
+    const res = await fetch(`${API}/api/summary`);
+    const data = await res.json();
+    document.getElementById('totalCampaigns').textContent = data.total_campaigns;
+    document.getElementById('alertsToday').textContent = data.alerts_today;
+    document.getElementById('totalSnapshots').textContent = data.total_snapshots;
+    document.getElementById('lastUpdate').textContent = data.last_update
+      ? `Última sync: ${new Date(data.last_update).toLocaleTimeString('pt-BR')}`
+      : 'Sem dados ainda';
+  } catch { console.warn('Summary unavailable'); }
+}
+
+// ---- Campaigns ----
+async function loadCampaigns() {
+  try {
+    const res = await fetch(`${API}/api/campaigns`);
+    const data = await res.json();
+    const tbody = document.getElementById('campaignsBody');
+
+    if (!data.campaigns.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="empty"><div class="icon">📊</div>Nenhuma campanha monitorada ainda.<br>Aguardando dados do Coupler.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = data.campaigns.map(c => {
+      const impToday = c.today?.impressions ?? 0;
+      const impYest = c.yesterday?.impressions ?? 0;
+      const costToday = c.today?.cost ?? 0;
+      const costYest = c.yesterday?.cost ?? 0;
+      const delta = impYest > 0 ? (((impToday - impYest) / impYest) * 100).toFixed(1) : 0;
+      const deltaClass = delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat';
+      const deltaStr = delta > 0 ? `+${delta}%` : `${delta}%`;
+      const statusClass = statusBadge(c.status);
+
+      return `<tr>
+        <td><strong>${esc(c.campaign_name)}</strong><br><span class="mono" style="color:var(--text2)">${c.campaign_id}</span></td>
+        <td><span class="badge ${statusClass}">${esc(c.status)}</span></td>
+        <td class="mono">${fmt(impToday)}</td>
+        <td class="mono">${fmt(impYest)}</td>
+        <td class="mono">R$ ${costToday.toFixed(2)}</td>
+        <td class="mono">R$ ${costYest.toFixed(2)}</td>
+        <td><span class="delta ${deltaClass}">${deltaStr}</span></td>
+      </tr>`;
+    }).join('');
+  } catch { console.warn('Campaigns unavailable'); }
+}
+
+// ---- Alerts ----
+async function loadAlerts() {
+  try {
+    const res = await fetch(`${API}/api/alerts?limit=50`);
+    const data = await res.json();
+    const list = document.getElementById('alertsList');
+
+    if (!data.alerts.length) {
+      list.innerHTML = '<div class="empty"><div class="icon">✅</div>Nenhum alerta registrado.<br>Tudo funcionando normalmente.</div>';
+      return;
+    }
+
+    list.innerHTML = data.alerts.map(a => {
+      const iconClass = a.alert_type === 'campaign_stopped' ? 'stopped'
+        : a.alert_type === 'spend_zeroed' ? 'spend' : 'status';
+      const icon = a.alert_type === 'campaign_stopped' ? '🚨'
+        : a.alert_type === 'spend_zeroed' ? '💰' : '🔄';
+
+      return `<div class="alert-item">
+        <div class="alert-icon ${iconClass}">${icon}</div>
+        <div>
+          <div class="alert-msg">${esc(a.message)}</div>
+          <div class="alert-time">${new Date(a.created_at).toLocaleString('pt-BR')}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch { console.warn('Alerts unavailable'); }
+}
+
+// ---- Charts ----
+async function loadMetrics() {
+  try {
+    const res = await fetch(`${API}/api/metrics`);
+    const data = await res.json();
+    const m = data.metrics;
+
+    const labels = m.map(x => {
+      const d = new Date(x.ingested_at);
+      return `${d.toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit'})} ${d.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}`;
+    });
+    const costs = m.map(x => x.total_cost);
+    const imps = m.map(x => x.total_impressions);
+
+    const chartOpts = {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: '#1e293b' } },
+        y: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } }
+      }
+    };
+
+    if (spendChart) spendChart.destroy();
+    spendChart = new Chart(document.getElementById('chartSpend'), {
+      type: 'line',
+      data: { labels, datasets: [{ data: costs, borderColor: '#22d3ee', backgroundColor: 'rgba(34,211,238,0.1)', fill: true, tension: 0.3, pointRadius: 2 }] },
+      options: chartOpts
+    });
+
+    if (impressionsChart) impressionsChart.destroy();
+    impressionsChart = new Chart(document.getElementById('chartImpressions'), {
+      type: 'bar',
+      data: { labels, datasets: [{ data: imps, backgroundColor: '#818cf8', borderRadius: 4 }] },
+      options: chartOpts
+    });
+  } catch { console.warn('Metrics unavailable'); }
+}
+
+// ---- Snapshots ----
+async function loadSnapshots() {
+  try {
+    const filter = document.getElementById('snapshotFilter')?.value || '';
+    const url = filter ? `${API}/api/snapshots?campaign_id=${filter}&limit=100` : `${API}/api/snapshots?limit=100`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const tbody = document.getElementById('snapshotsBody');
+
+    if (!data.snapshots.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="empty"><div class="icon">📸</div>Nenhum snapshot encontrado.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = data.snapshots.map(s => `<tr>
+      <td class="mono" style="font-size:11px">${esc(s.batch_id.substring(0,20))}…</td>
+      <td>${esc(s.campaign_name)}<br><span class="mono" style="color:var(--text2);font-size:11px">${s.campaign_id}</span></td>
+      <td><span class="badge ${statusBadge(s.status)}">${esc(s.status)}</span></td>
+      <td class="mono">${fmt(s.impressions)}</td>
+      <td class="mono">R$ ${s.cost.toFixed(2)}</td>
+      <td class="mono">${s.report_date}</td>
+      <td class="mono" style="font-size:12px">${new Date(s.ingested_at).toLocaleString('pt-BR')}</td>
+    </tr>`).join('');
+  } catch { console.warn('Snapshots unavailable'); }
+}
+
+// ---- Helpers ----
+function statusBadge(s) {
+  const l = (s || '').toLowerCase();
+  if (l.includes('enabled') || l.includes('active')) return 'badge-active';
+  if (l.includes('paused')) return 'badge-paused';
+  if (l.includes('removed') || l.includes('stopped')) return 'badge-removed';
+  return 'badge-unknown';
+}
+function fmt(n) { return (n || 0).toLocaleString('pt-BR'); }
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+// ---- Init + auto-refresh ----
+function loadAll() { loadSummary(); loadCampaigns(); loadAlerts(); }
+loadAll();
+setInterval(loadAll, 30000); // refresh a cada 30s
+</script>
+</body>
+</html>
